@@ -1,26 +1,42 @@
 extends Node
 
-@onready var firebase = get_node("/root/Firebase")
-const DATABASE_URL = "https://boba-rush-3c9e4-default-rtdb.firebaseio.com/" 
-const ROOM_PATH = "rooms/"
-
-const GAME_PORT = 7777
-var peer = ENetMultiplayerPeer.new()
-
 signal lobby_created(room_code)
 signal lobby_joined
 signal lobby_join_failed(reason)
-signal player_joined(player_id, player_name)
+signal player_joined(player_id, player_info)
+signal player_left(player_id)
+signal host_started_game
 
-signal new_order_received(order_details)
-signal score_updated(player_id, new_score)
-signal game_over(winner_id)
+signal game_started(total_rounds)
+signal round_started(round_number, order_details)
+signal round_ended(scores, current_leaderboard)
+signal game_over_by_death(dead_player_id, player_name, final_scores)
+signal game_over_normally(final_scores)
 
-# Called when the node enters the scene tree for the first time.
+const DATABASE_URL = "https://boba-rush-3c9e4-default-rtdb.firebaseio.com/"
+const ROOM_PATH = "rooms/"
+const GAME_PORT = 7777
+
+@onready var firebase = get_node("/root/Firebase")
+var peer = ENetMultiplayerPeer.new()
+var local_player_name = "Player"
+
+enum GameState { LOBBY, IN_GAME, ROUND_END, GAME_OVER }
+var current_state = GameState.LOBBY
+var total_rounds = 3
+var current_round = 0
+
+var players = {}
+
+
 func _ready() -> void:
 	firebase.init(DATABASE_URL, self)
 	multiplayer.peer_connected.connect(_on_player_connected)
 	multiplayer.peer_disconnected.connect(_on_player_disconnected)
+	multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+func set_player_name(new_name: String):
+	local_player_name = new_name
 
 func host_game():
 	var host_ip = ""
@@ -30,6 +46,7 @@ func host_game():
 			break
 			
 	if host_ip == "":
+		print("Error: Could not find a local IP. Are you connected to a network?")
 		lobby_join_failed.emit("offline")
 		return
 
@@ -39,18 +56,22 @@ func host_game():
 	
 	var err = peer.create_server(GAME_PORT)
 	if err != OK:
+		print("Error: Could not create server.")
 		lobby_join_failed.emit("Could not create server.")
 		return
 		
 	multiplayer.set_multiplayer_peer(peer)
-	print("Server created! Your join code is: " + room_code)
+	print("Server created! Your join code is: "m + room_code)
+	
+	_register_player(1, local_player_name)
 	lobby_created.emit(room_code)
 
 func join_game(room_code):
-	print("Joining room: " + room_code)
+	print("Attempting to join room: " + room_code)
 	var result = await firebase.get_value(ROOM_PATH + room_code)
 
 	if result == null or not result.has("ip"):
+		print("Error: Room not found.")
 		lobby_join_failed.emit("Room not found!")
 		return
 
@@ -59,6 +80,7 @@ func join_game(room_code):
 	print("Room found! Connecting to host at " + host_ip)
 	var err = peer.create_client(host_ip, GAME_PORT)
 	if err != OK:
+		print("Error: Could not connect to host.")
 		lobby_join_failed.emit("Could not connect to host.")
 		return
 		
@@ -66,13 +88,215 @@ func join_game(room_code):
 
 func _on_player_connected(id):
 	print("Player connected: " + str(id))
-	player_joined.emit(id, "Player " + str(id))
 
 func _on_player_disconnected(id):
 	print("Player disconnected: " + str(id))
-	player_left.emit(id)
+	if players.has(id):
+		players.erase(id)
+		player_left_rpc.call(id)
+		player_left.emit(id)
 
+func _on_server_disconnected():
+	print("Disconnected from server.")
+	multiplayer.set_multiplayer_peer(null)
+	players.clear()
+	current_state = GameState.LOBBY
+	lobby_join_failed.emit("Lost connection to host.")
 
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
+@rpc("any_peer", "call_local")
+func register_player_rpc(player_name):
+	var id = multiplayer.get_remote_sender_id()
+	print("Registering player %d: %s" % [id, player_name])
+	
+	_register_player(id, player_name)
+	
+	welcome_player_rpc.call_id(id, players)
+	
+	player_joined_rpc.call(players[id])
+
+func _register_player(id, player_name):
+	var player_info = {
+		"name": player_name,
+		"score": 0,
+		"finished_round": false,
+		"dead": false
+	}
+	players[id] = player_info
+	player_joined.emit(id, player_info)
+
+@rpc("authority")
+func welcome_player_rpc(all_players):
+	players = all_players
+	lobby_joined.emit()
+
+@rpc("authority")
+func player_joined_rpc(player_info):
+	var id = multiplayer.get_remote_sender_id()
 	pass
+
+@rpc("any_peer", "call_local")
+func client_register_info(player_name):
+	var id = multiplayer.get_remote_sender_id()
+	print("Registering player %d: %s" % [id, player_name])
+	
+	var player_info = {
+		"name": player_name,
+		"score": 0,
+		"finished_round": false,
+		"dead": false
+	}
+	players[id] = player_info
+	
+	player_joined_rpc.call(id, player_info)
+	
+	sync_full_player_list_rpc.call_id(id, players)
+	
+	player_joined.emit(id, player_info)
+
+@rpc("authority")
+func player_joined_rpc(id, player_info):
+	if id == multiplayer.get_unique_id():
+		return
+	print("Adding new player %d to local list" % id)
+	players[id] = player_info
+	player_joined.emit(id, player_info)
+
+@rpc("authority")
+func sync_full_player_list_rpc(all_players):
+	players = all_players
+	lobby_joined.emit()
+
+@rpc("authority")
+func player_left_rpc(id):
+	if players.has(id):
+		players.erase(id)
+		player_left.emit(id)
+
+func start_game(num_rounds: int):
+	if not multiplayer.is_server():
+		return
+		
+	print("Host is starting the game with %d rounds." % num_rounds)
+	total_rounds = num_rounds
+	current_round = 0
+	current_state = GameState.IN_GAME
+	
+	start_game_rpc.call(total_rounds)
+	
+	_start_next_round()
+
+@rpc("authority")
+func start_game_rpc(num_rounds):
+	total_rounds = num_rounds
+	current_state = GameState.IN_GAME
+	game_started.emit(total_rounds)
+	print("Game started! %d rounds." % total_rounds)
+
+func _start_next_round():
+	if not multiplayer.is_server():
+		return
+		
+	current_round += 1
+	print("Host starting round %d" % current_round)
+	
+	for id in players:
+		if not players[id]["dead"]:
+			players[id]["finished_round"] = false
+			
+	var order_details = {
+		"drink_name": "Caffeine Bomb",
+		"ingredients": ["coffee", "coffee", "sugar", "danger"]
+	}
+	
+	start_round_rpc.call(current_round, order_details)
+	
+@rpc("authority")
+func start_round_rpc(round_num, order):
+	current_round = round_num
+	current_state = GameState.IN_GAME
+	print("Round %d started." % current_round)
+	round_started.emit(current_round, order)
+
+@rpc("any_peer", "call_local")
+func client_finished_drink(drink_data):
+	var id = multiplayer.get_remote_sender_id()
+	
+	if not players.has(id) or players[id]["finished_round"]:
+		return
+		
+	print("Host received finished drink from player %d" % id)
+	players[id]["finished_round"] = true
+	
+	var score_for_this_round = 100
+	var customer_died = false
+	
+	if drink_data.has("caffeine") and drink_data["caffeine"] > 2:
+		customer_died = true
+
+	if customer_died:
+		print("Player %d's customer died!" % id)
+		players[id]["dead"] = true
+		players[id]["score"] = 0
+		_end_game_due_to_death(id)
+	else:
+		players[id]["score"] += score_for_this_round
+		_check_if_round_over()
+
+func _check_if_round_over():
+	if not multiplayer.is_server():
+		return
+
+	var all_finished = true
+	for id in players:
+		if not players[id]["dead"] and not players[id]["finished_round"]:
+			all_finished = false
+			break
+			
+	if all_finished:
+		print("Host: All players finished round %d." % current_round)
+		_end_round()
+
+func _end_round():
+	current_state = GameState.ROUND_END
+	
+	end_round_rpc.call(players)
+	
+	await get_tree().create_timer(5.0).timeout
+	
+	if current_round >= total_rounds:
+		_end_game_normally()
+	else:
+		_start_next_round()
+
+func _end_game_normally():
+	current_state = GameState.GAME_OVER
+	print("Host: Game over normally.")
+	game_over_normally_rpc.call(players)
+
+func _end_game_due_to_death(dead_player_id):
+	current_state = GameState.GAME_OVER
+	print("Host: Game over due to death by player %d" % dead_player_id)
+	var player_name = players[dead_player_id]["name"]
+	
+	game_over_by_death_rpc.call(dead_player_id, player_name, players)
+
+@rpc("authority")
+func end_round_rpc(all_player_data):
+	current_state = GameState.ROUND_END
+	players = all_player_data
+	round_ended.emit(players, players)
+	print("Client: Round ended.")
+
+@rpc("authority")
+func game_over_normally_rpc(final_scores):
+	current_state = GameState.GAME_OVER
+	players = final_scores
+	game_over_normally.emit(final_scores)
+	print("Client: Game over normally.")
+
+@rpc("authority")
+func game_over_by_death_rpc(dead_player_id, player_name, final_scores):
+	current_state = GameState.GAME_OVER
+	players = final_scores
+	game_over_by_death.emit(dead_player_id, player_name, final_scores)
+	print("Client: Game over by DEATH!")
