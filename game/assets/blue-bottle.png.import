@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bwmoudjfym8mg"
-path="res://.godot/imported/shovel.png-36a84a629eb7384cbc468a0b1b992bdc.ctex"
+uid="uid://xrwfesaeqvew"
+path="res://.godot/imported/blue-bottle.png-1922ff5ebeaeca0b9c9a05edb40dca90.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/shovel.png"
-dest_files=["res://.godot/imported/shovel.png-36a84a629eb7384cbc468a0b1b992bdc.ctex"]
+source_file="res://assets/blue-bottle.png"
+dest_files=["res://.godot/imported/blue-bottle.png-1922ff5ebeaeca0b9c9a05edb40dca90.ctex"]
 
 [params]
 

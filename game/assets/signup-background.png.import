@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bwmoudjfym8mg"
-path="res://.godot/imported/shovel.png-36a84a629eb7384cbc468a0b1b992bdc.ctex"
+uid="uid://byniunpjk4ns7"
+path="res://.godot/imported/signup-background.png-6243cc7ba4ccf4cdeca4e8716e8a9552.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/shovel.png"
-dest_files=["res://.godot/imported/shovel.png-36a84a629eb7384cbc468a0b1b992bdc.ctex"]
+source_file="res://assets/signup-background.png"
+dest_files=["res://.godot/imported/signup-background.png-6243cc7ba4ccf4cdeca4e8716e8a9552.ctex"]
 
 [params]
 

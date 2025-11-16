@@ -20,7 +20,8 @@ load_path = "res://.godot/imported/arrow-placeholder.png-da408cdad7e8541b6e78408
 [node name="Opening" type="Node"]
 
 [node name="HomeBackground" type="Sprite2D" parent="."]
-position = Vector2(577, 330)
+position = Vector2(577, 320.5)
+scale = Vector2(1, 1.02932)
 texture = ExtResource("1_y6ged")
 
 [node name="Label" type="Label" parent="."]
@@ -36,9 +37,9 @@ label_settings = SubResource("LabelSettings_hsrnu")
 
 [node name="Button" type="Button" parent="."]
 offset_left = 795.0
-offset_top = 200.0
+offset_top = 257.0
 offset_right = 978.0
-offset_bottom = 349.0
+offset_bottom = 406.0
 scale = Vector2(1.82584, 1.42881)
 icon = SubResource("CompressedTexture2D_fvetl")
 script = ExtResource("3_y6ged")
