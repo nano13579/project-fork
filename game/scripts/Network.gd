@@ -17,6 +17,10 @@ signal show_winner_screen(final_scores)
 signal return_to_lobby
 signal return_to_main_menu
 
+signal show_winner_screen(final_scores)
+signal return_to_lobby
+signal return_to_main_menu
+
 const ROOM_PATH = "rooms/"
 const GAME_PORT = 7777
 
@@ -320,6 +324,67 @@ func game_over_by_customer_death_rpc(killing_player_id, player_name, final_score
 	players = final_scores
 	game_over_by_customer_death.emit(killing_player_id, player_name, final_scores, jumpscare_video_index)
 	print("Client: Game over by CUSTOMER DEATH!")
+
+func host_request_next_round():
+	if not multiplayer.is_server():
+		return
+	
+	if current_state == GameState.ROUND_END and current_round < total_rounds:
+		_start_next_round()
+
+func host_request_winner_screen():
+	if not multiplayer.is_server():
+		return
+	
+	if current_state == GameState.GAME_OVER:
+		show_winner_screen_rpc.call(players)
+
+func host_request_play_again():
+	if not multiplayer.is_server():
+		return
+	
+	return_to_lobby_rpc.call()
+
+func host_request_return_to_home():
+	if not multiplayer.is_server():
+		return
+	
+	return_to_main_menu_rpc.call()
+	await get_tree().create_timer(0.1).timeout
+	get_tree().quit()
+
+
+@rpc("authority")
+func show_winner_screen_rpc(final_scores):
+	current_state = GameState.GAME_OVER
+	show_winner_screen.emit(final_scores)
+
+@rpc("authority")
+func return_to_lobby_rpc():
+	current_state = GameState.LOBBY
+	current_round = 0
+	killing_player_trigger_id = -1
+	current_order_details = {}
+	
+	if players.has(multiplayer.get_unique_id()):
+		players[multiplayer.get_unique_id()]["score"] = 0
+		players[multiplayer.get_unique_id()]["finished_round"] = false
+		players[multiplayer.get_unique_id()]["customer_dead"] = false
+	
+	if multiplayer.is_server():
+		for id in players:
+			players[id]["score"] = 0
+			players[id]["finished_round"] = false
+			players[id]["customer_dead"] = false
+			
+	return_to_lobby.emit()
+
+@rpc("authority")
+func return_to_main_menu_rpc():
+	return_to_main_menu.emit()
+	if not multiplayer.is_server():
+		multiplayer.set_multiplayer_peer(null)
+		players.clear()
 
 func host_request_next_round():
 	if not multiplayer.is_server():
