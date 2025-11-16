@@ -1,3 +1,25 @@
-[gd_scene format=3 uid="uid://cv3djgf5g25xj"]
+[gd_scene load_steps=4 format=3 uid="uid://cv3djgf5g25xj"]
+
+[ext_resource type="Texture2D" uid="uid://byniunpjk4ns7" path="res://assets/signup-background.png" id="1_5uod7"]
+
+[sub_resource type="FontFile" id="FontFile_044tc"]
+cache/0/16/0/ascent = 0.0
+cache/0/16/0/descent = 0.0
+cache/0/16/0/underline_position = 0.0
+cache/0/16/0/underline_thickness = 0.0
+cache/0/16/0/scale = 1.0
+
+[sub_resource type="LabelSettings" id="LabelSettings_ndg6w"]
 
 [node name="Signin" type="Node"]
+
+[node name="Signup-background" type="Sprite2D" parent="."]
+position = Vector2(577, 325)
+texture = ExtResource("1_5uod7")
+
+[node name="Label" type="Label" parent="."]
+offset_right = 40.0
+offset_bottom = 23.0
+theme_override_fonts/font = SubResource("FontFile_044tc")
+text = "Player Name"
+label_settings = SubResource("LabelSettings_ndg6w")
